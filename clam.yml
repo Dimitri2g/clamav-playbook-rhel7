@@ -1,6 +1,6 @@
 # Installs and configures clamav as a daemon
 # To run:
-# ansible-playbook -i '192.168.19.171, ' clam.yml -b -K
+# ansible-playbook -i 'xxx.xxx.xxx.xxx, ' clam.yml -b -K
 
 ---
 - hosts: all
