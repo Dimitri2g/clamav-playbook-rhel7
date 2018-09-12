@@ -1,0 +1,148 @@
+# Installs and configures clamav as a daemon
+# To run:
+# ansible-playbook -i '192.168.19.171, ' clam.yml -b -K
+
+---
+- hosts: all
+  become: yes
+  tasks:
+     - name: ensure a list of Clamav (^_^) is installed
+       yum:
+         name: "{{ packages }}"
+       vars:
+         packages:
+         - clamav
+         - clamav-scanner
+         - clamav-server
+         - clamav-data
+         - clamav-update
+         - clamav-filesystem
+         - clamav-scanner-systemd
+         - clamav-server-systemd
+         - clamav-devel
+         - clamav-lib
+
+#Configure SELinux for ClamAV
+     - name: Set antivirus_can_scan_system flag on and keep it persistent across reboots (selinux y u do dis?) (-_-)
+       seboolean:
+          name: antivirus_can_scan_system
+          state: yes
+          persistent: yes
+
+          #Configuration of Calm daemon
+     - name: Copy /usr/share/clamav/template/clamd.conf to /etc/clamd.d/clamd.conf (>^_^)>
+       copy:
+         src: /usr/share/clamav/template/clamd.conf
+         dest: /etc/clamd.d/clamd.conf
+         remote_src: yes
+
+     - name: Remove or comment out Example from /etc/clamd.d/clamd.conf <(^_^<)
+       lineinfile:
+         path: /etc/clamd.d/clamd.conf
+         state: absent
+         regexp: '^Example'
+
+     - name: Change calm user (>^^)>
+       lineinfile:
+         path: /etc/clamd.d/clamd.conf
+         regexp: '^User'
+         line: 'User clamscan'
+
+     - name: Change calmd scan local socket <(^^<)
+       lineinfile:
+         path: /etc/clamd.d/clamd.conf
+         regexp: '^#LocalSocket'
+         insertafter: '^#LocalSocket'
+         line: 'LocalSocket /var/run/clamd.scan/clamd.sock'
+
+         #Enable freshclam
+     - name: Copy /etc/freshclam.conf to /etc/freshclam.conf.bak (>^_^)>
+       copy:
+         src: /etc/freshclam.conf
+         dest: /etc/freshclam.conf.bak
+         remote_src: yes
+
+     - name: Remove or comment out Example from /etc/freshclam.conf <(^_^<)
+       lineinfile:
+         path: /etc/freshclam.conf
+         state: absent
+         regexp: '^Example'
+
+         #Missing systemd service file
+     - name: Create a new file /usr/lib/systemd/system/clam-freshclam.service (@_@)
+       file:
+         path: /usr/lib/systemd/system/clam-freshclam.service
+         state: touch
+          
+     - name: Create a new file /usr/lib/systemd/system/clam-freshclam.service (^-_-^)
+       blockinfile:
+         path: /usr/lib/systemd/system/clam-freshclam.service
+         block: |
+           # Run the freshclam as daemon
+           [Unit]
+           Description = freshclam scanner
+           After = network.target
+
+           [Service]
+           Type = forking
+           ExecStart = /usr/bin/freshclam -d -c 4
+           Restart = on-failure
+           PrivateTmp = true
+
+           [Install]
+           WantedBy=multi-user.target
+
+     - name: enable and start clamd-freshclam.service (^_^)
+       service:
+         name: clam-freshclam.service
+         enabled: yes
+         force: yes
+         state: started
+
+         #Change service files
+  
+     - name: Remove @ from /usr/lib/systemd/system/clamd@scan.service <(^_^<)
+       lineinfile:
+         path: /usr/lib/systemd/system/clamd@scan.service
+         regexp: '^.include /lib/systemd/system/clamd@.service'
+         state: absent
+
+     - name: Remove @ from /usr/lib/systemd/system/clamd@scan.service <(^_^<)
+       lineinfile:
+         path: /usr/lib/systemd/system/clamd@scan.service
+         insertbefore: BOF
+         line: '.include /lib/systemd/system/clamd.service'
+
+     - name: Create the clamd service file /usr/lib/systemd/system/clamd.service <(-_-)>
+       file:
+         path: /usr/lib/systemd/system/clamd.service
+         state: touch
+
+     - name: Changing the clamd service file /usr/lib/systemd/system/clamd.service <(-_-)>
+       blockinfile:
+         path: /usr/lib/systemd/system/clamd.service
+         block: |
+           [Unit]
+           Description = clamd scanner daemon
+           After = syslog.target nss-lookup.target network.target
+
+           [Service]
+           Type = simple
+           ExecStart = /usr/sbin/clamd -c /etc/clamd.d/clamd.conf --foreground=yes
+           Restart = on-failure
+           PrivateTmp = true
+
+           [Install]
+           WantedBy=multi-user.target     
+
+     - name: enable and start clamd.service (^_^)
+       service:
+         name: clamd.service
+         enabled: yes
+         state: started
+
+     - name: enable and start clamd@scan.service (^_^)
+       service:
+         name: clamd@scan.service
+         enabled: yes
+         state: started
